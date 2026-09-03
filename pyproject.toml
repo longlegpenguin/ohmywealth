@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ohmywealth"
+version = "0.1.0"
+description = "Personal wealth management tools."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "dash>=2.18",
+    "openpyxl>=3.1",
+    "plotly>=5.24",
+    "sqlalchemy>=2.0",
+    "yfinance>=0.2.54",
+]
+
+[project.scripts]
+ohmywealth = "ohmywealth.__main__:main"
+ohmywealth-demo = "ohmywealth.demo:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.11",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

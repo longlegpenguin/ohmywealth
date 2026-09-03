@@ -1,0 +1,30 @@
+:root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #16302b; background: #f5f8f7; }
+body { margin: 0; }
+.shell { max-width: 1200px; margin: auto; padding: 0 24px 48px; }
+header { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+header h1 { margin: 0; font-size: 1.35rem; }
+nav { display: flex; gap: 18px; }
+a { color: #087f70; text-decoration: none; font-weight: 650; }
+main { background: white; border: 1px solid #e2ebe8; border-radius: 18px; padding: 28px; box-shadow: 0 12px 35px rgba(25, 70, 60, .06); }
+.toolbar, .form-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.toolbar { justify-content: space-between; }
+.toolbar .dash-dropdown { min-width: 320px; flex: 1; }
+.toolbar .currency-picker { min-width: 90px; flex: 0 0 90px; }
+button { border: 0; border-radius: 8px; padding: 10px 14px; background: #087f70; color: white; cursor: pointer; }
+input, select { border: 1px solid #bfd1cc; border-radius: 8px; padding: 9px; background: white; }
+.metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 22px 0; }
+.metrics > div { background: #edf7f4; padding: 18px; border-radius: 12px; }
+.metrics h2 { margin: 4px 0 0; }
+.trend-charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
+.composition-charts { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+.chart-card { border: 1px solid #e5eeeb; border-radius: 12px; overflow: hidden; }
+.warning { background: #fff1d6; color: #795000; padding: 10px 12px; border-radius: 8px; margin: 12px 0; }
+.asset-row, .worksheet-row { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5eeeb; padding: 13px 0; }
+.asset-row small { margin-left: 9px; color: #627873; }
+.section-heading { margin-top: 32px; }
+.data-card { border: 1px solid #e5eeeb; border-radius: 12px; padding: 18px; margin: 16px 0; }
+.data-card h3 { flex-basis: 100%; margin: 0 0 4px; }
+.data-card p { flex-basis: 100%; margin: 0 0 8px; color: #627873; }
+.data-card .dash-dropdown { min-width: 280px; flex: 1; }
+.worksheet-row input { width: 180px; }
+@media (max-width: 800px) { .composition-charts { grid-template-columns: minmax(0, 1fr); } .metrics { grid-template-columns: 1fr; } header { align-items: flex-start; gap: 15px; flex-direction: column; } }
