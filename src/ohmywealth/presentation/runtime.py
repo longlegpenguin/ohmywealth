@@ -6,13 +6,14 @@ from pathlib import Path
 from sqlalchemy.engine import Engine
 
 from ohmywealth.application.market import CachedMarketData
+from ohmywealth.application.ports import MarketDataProvider
 from ohmywealth.application.reporting import ReportingService
 from ohmywealth.application.snapshots import SnapshotService
+from ohmywealth.infrastructure.market_data import RoutedMarketData
 from ohmywealth.infrastructure.repository import (
     SqliteMarketCache,
     SqliteWealthRepository,
 )
-from ohmywealth.infrastructure.yahoo import YahooMarketData
 
 
 @dataclass(frozen=True)
@@ -22,7 +23,7 @@ class Services:
     snapshots: SnapshotService
     market: CachedMarketData
     reporting: ReportingService
-    provider: YahooMarketData
+    provider: MarketDataProvider
 
 
 services: Services | None = None
@@ -39,7 +40,7 @@ def create_services(engine: Engine, database_path: Path | None = None) -> Servic
             raise ValueError("A file-backed SQLite database is required")
         database_path = Path(engine.url.database).resolve()
     repository = SqliteWealthRepository(engine)
-    provider = YahooMarketData()
+    provider = RoutedMarketData()
     market = CachedMarketData(provider, SqliteMarketCache(engine))
     return Services(
         database_path.resolve(),

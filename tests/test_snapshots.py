@@ -18,3 +18,15 @@ def test_copy_and_update_monthly_snapshot(tmp_path) -> None:
     updated = service.save(date(2026, 2, 5), {1: Decimal("12.5")})
     assert updated.positions[0].quantity == Decimal("12.5")
     assert len(repository.list_snapshots()) == 2
+
+
+def test_opening_empty_draft_recopies_previous_month(tmp_path) -> None:
+    repository = SqliteWealthRepository(create_database(tmp_path / "wealth.db"))
+    service = SnapshotService(repository)
+    repository.save_snapshot(date(2026, 1, 1), {1: Decimal("10")})
+    repository.save_snapshot(date(2026, 2, 1), {})
+
+    reopened = service.open_month(date(2026, 2, 1))
+
+    assert reopened is not None
+    assert reopened.positions[0].quantity == Decimal("10")

@@ -18,7 +18,9 @@ class SnapshotService:
     def open_month(self, month: date, copy_previous: bool = True) -> Snapshot | None:
         month = month_start(month)
         existing = self.repository.get_snapshot(month)
-        if existing is not None or not copy_previous:
+        if existing is not None and existing.positions:
+            return existing
+        if not copy_previous:
             return existing
         return self.repository.copy_latest_snapshot(month)
 

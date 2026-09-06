@@ -23,7 +23,7 @@ def value_holding(
 ) -> ValuedHolding:
     if quantity < 0:
         raise ValueError("Position quantity cannot be negative")
-    if asset.kind == AssetKind.CASH:
+    if asset.kind in {AssetKind.CASH, AssetKind.CD, AssetKind.PRIVATE_BOND}:
         unit_price = Decimal("1")
         quote_time = fx.observed_at
         quote_stale = False
@@ -39,12 +39,15 @@ def value_holding(
     warning = None
     if quote_stale or fx.stale:
         warning = "Using the last valid market value"
+    native_value = quantity * unit_price
+    if asset.kind == AssetKind.BOND:
+        native_value /= Decimal("100")
     return ValuedHolding(
         asset=asset,
         quantity=quantity,
         unit_price=unit_price,
         fx_rate=fx.value,
-        value=convert(quantity * unit_price, fx.value),
+        value=convert(native_value, fx.value),
         quote_time=quote_time,
         warning=warning,
     )

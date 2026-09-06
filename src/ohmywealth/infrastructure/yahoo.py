@@ -5,12 +5,24 @@ from decimal import Decimal
 
 import yfinance as yf
 
+from ohmywealth.domain.identifiers import is_valid_isin
 from ohmywealth.domain.models import MarketValue
 
 
 class YahooMarketData:
     def metadata(self, ticker: str) -> dict[str, str]:
-        info = yf.Ticker(ticker).get_info()
+        ticker = ticker.strip().upper()
+        try:
+            instrument = yf.Ticker(ticker)
+        except ValueError as error:
+            if is_valid_isin(ticker):
+                raise ValueError(
+                    f"{ticker} is a valid ISIN, but Yahoo Finance does not provide "
+                    "a quote ticker for it. Use a Yahoo Finance ticker or track "
+                    "this bond with manual pricing when that feature is available."
+                ) from error
+            raise
+        info = instrument.get_info()
         if not info or not (info.get("symbol") or info.get("shortName")):
             raise ValueError(f"Ticker {ticker!r} was not recognized by Yahoo Finance")
         return {

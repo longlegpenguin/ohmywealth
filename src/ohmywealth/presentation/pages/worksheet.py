@@ -7,6 +7,7 @@ import dash
 from dash import ALL, Input, Output, State, callback, dcc, html
 from dash.exceptions import PreventUpdate
 
+from ohmywealth.domain.models import Asset
 from ohmywealth.presentation.runtime import get
 
 dash.register_page(__name__, path="/worksheet", name="Monthly worksheet")
@@ -47,10 +48,11 @@ def open_month(clicks: int | None, value: str) -> tuple[list[html.Div], str]:
     quantities = (
         {} if snapshot is None else {p.asset_id: p.quantity for p in snapshot.positions}
     )
+    assets = get().repository.list_assets()
     rows = [
         html.Label(
             [
-                html.Span(f"{asset.display_name} · {asset.currency}"),
+                html.Span(_worksheet_label(asset)),
                 dcc.Input(
                     id={"type": "position-value", "index": asset.id},
                     type="number",
@@ -61,9 +63,20 @@ def open_month(clicks: int | None, value: str) -> tuple[list[html.Div], str]:
             ],
             className="worksheet-row",
         )
-        for asset in get().repository.list_assets()
+        for asset in assets
     ]
     return rows, f"Loaded {month.strftime('%B %Y')}"
+
+
+def _worksheet_label(asset: Asset) -> str:
+    label = f"{asset.display_name} · {asset.currency}"
+    if asset.kind.value == "bond":
+        return f"{label} · face value"
+    if asset.kind.value == "cd":
+        return f"{label} · current amount"
+    if asset.kind.value == "private_bond":
+        return f"{label} · current amount"
+    return label
 
 
 @callback(
@@ -82,6 +95,8 @@ def save_month(
 ) -> object:
     if not clicks:
         raise PreventUpdate
+    if not identifiers:
+        return html.Div("Open the month before saving it.", className="warning")
     try:
         values = {
             int(identifier["index"]): Decimal(str(quantity or 0))

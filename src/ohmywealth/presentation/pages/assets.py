@@ -15,21 +15,25 @@ def layout() -> html.Div:
         [
             html.H2("Asset catalog"),
             html.P(
-                "Cash accounts use your chosen account name; quoted assets use a "
-                "Yahoo Finance ticker."
+                "Cash and certificate-of-deposit accounts use your chosen account "
+                "name. Stocks and ETFs use a Yahoo Finance ticker; individual "
+                "bonds accept an ISIN, and US bonds also accept a CUSIP."
             ),
             html.Div(
                 [
                     dcc.Dropdown(
                         id="asset-kind",
                         options=[
-                            {"label": kind.value.title(), "value": kind.value}
+                            {"label": kind.label, "value": kind.value}
                             for kind in AssetKind
                         ],
                         value=AssetKind.CASH.value,
                         clearable=False,
                     ),
-                    dcc.Input(id="asset-symbol", placeholder="Account name or ticker"),
+                    dcc.Input(
+                        id="asset-symbol",
+                        placeholder="Account name, ticker, ISIN, or CUSIP",
+                    ),
                     dcc.Input(id="asset-nickname", placeholder="Nickname (optional)"),
                     dcc.Input(id="asset-currency", value="CNY", placeholder="Currency"),
                     html.Button("Add asset", id="add-asset"),
@@ -50,7 +54,7 @@ def _asset_rows(assets: list[Asset], action: str) -> list[html.Div]:
                     [
                         html.Strong(asset.display_name),
                         html.Small(
-                            f" {asset.symbol} · {asset.kind.value} · {asset.currency}"
+                            f" {asset.symbol} · {asset.kind.label} · {asset.currency}"
                         ),
                     ]
                 ),
@@ -112,13 +116,13 @@ def edit_assets(
                 message = "Asset archived. Existing snapshots are preserved."
         elif add_clicks:
             if not symbol or not currency:
-                raise ValueError("Enter an account name/ticker and currency")
+                raise ValueError("Enter an account name, ticker, ISIN, or CUSIP")
             if currency.upper() not in SUPPORTED_CURRENCIES:
                 supported = ", ".join(SUPPORTED_CURRENCIES)
                 raise ValueError(f"Currency must be one of: {supported}")
             kind = AssetKind(kind_value)
             nickname = nickname.strip() if nickname and nickname.strip() else None
-            if kind == AssetKind.CASH:
+            if kind in {AssetKind.CASH, AssetKind.CD}:
                 asset = Asset(
                     None,
                     symbol,
@@ -129,22 +133,25 @@ def edit_assets(
                 )
             else:
                 metadata = get().provider.metadata(symbol.strip().upper())
-                if metadata["currency"] not in SUPPORTED_CURRENCIES:
+                metadata_currency = metadata.get("currency") or currency.upper()
+                if metadata_currency not in SUPPORTED_CURRENCIES:
                     raise ValueError(
                         f"{metadata['symbol']} trades in unsupported currency "
-                        f"{metadata['currency']}"
+                        f"{metadata_currency}"
                     )
                 mapped_kind = {
                     "equity": AssetKind.STOCK,
                     "etf": AssetKind.ETF,
                     "bond": AssetKind.BOND,
+                    "private_bond": AssetKind.PRIVATE_BOND,
+                    "cd": AssetKind.CD,
                 }.get(metadata["type"], kind)
                 asset = Asset(
                     None,
                     metadata["symbol"],
                     metadata["name"],
                     mapped_kind,
-                    metadata["currency"],
+                    metadata_currency,
                     metadata["exchange"],
                     nickname=nickname,
                 )

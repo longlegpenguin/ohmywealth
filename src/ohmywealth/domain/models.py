@@ -13,7 +13,17 @@ class AssetKind(str, Enum):
     STOCK = "stock"
     ETF = "etf"
     BOND = "bond"
+    PRIVATE_BOND = "private_bond"
+    CD = "cd"
     OTHER = "other"
+
+    @property
+    def label(self) -> str:
+        labels = {
+            self.CD: "Certificate of deposit",
+            self.PRIVATE_BOND: "Private bond",
+        }
+        return labels.get(self, self.value.title())
 
 
 @dataclass(frozen=True)

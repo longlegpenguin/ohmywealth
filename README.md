@@ -1,8 +1,8 @@
 # Oh My Wealth
 
 A private, local wealth dashboard built with Dash, Plotly, SQLite, SQLAlchemy,
-and yfinance. It tracks monthly cash balances and quoted-asset units, then values
-every month at current prices and FX rates.
+yfinance, and a public US bond quote adapter. It tracks monthly cash balances
+and quoted assets, then values every month at current prices and FX rates.
 
 Supported currencies are CNY, HUF, USD, EUR, GBP, and HKD.
 
@@ -35,10 +35,28 @@ automatically reload the development server.
 To preview a sample portfolio in an empty database, run `uv run ohmywealth-demo`.
 The command never changes a database that already contains assets.
 
-Use **Assets** to add cash accounts or Yahoo Finance tickers, then use the
-**Monthly worksheet** to enter balances and units. A new month starts from the
-latest preceding snapshot. The dashboard defaults to CNY and clearly marks
-stale cached quotes when the provider is unavailable.
+Use **Assets** to add cash accounts, Yahoo Finance tickers, bonds by ISIN, or US
+bonds by CUSIP. ISIN reference data is resolved through OpenFIGI; public US bond
+prices use the bond quote adapter. Unlisted OTC bonds and certificates of
+deposit may have reference data but no public price, in which case the app shows
+an explicit warning rather than inventing a value. In the **Monthly worksheet**,
+enter cash balances, stock/ETF units, or the face value of bonds. A new month
+starts from the latest preceding snapshot. The dashboard defaults to CNY and
+marks stale cached quotes when a provider is unavailable.
+
+The Overview selector can filter the complete report by asset class, account
+currency, or individual account. Multiple selections are combined, and
+`All assets` restores the full portfolio.
+
+Ordinary bond prices are percentages of par. For example, face value `10,000`
+at a quote of `100.266` is valued at `10,026.60` before currency conversion.
+Certificates of deposit are shown as a separate asset class and use the current
+amount entered each month, with no market quote or ISIN required. Create one
+stable account per institution and currency, such as `HSBC CD Account` in USD,
+then enter the aggregate account value each month. Renewing its underlying
+certificates does not create more assets.
+Unlisted non-CD instruments are classified as private bonds and likewise use
+the current statement amount entered each month.
 
 Assets can have an optional nickname. Quoted assets retain their official
 provider name and display it as `Official name (Nickname)`.
@@ -65,6 +83,7 @@ through replaceable interfaces.
 src/ohmywealth/
 ├── domain/                 # Financial models and pure valuation rules
 │   ├── models.py
+│   ├── identifiers.py       # ISIN/CUSIP validation and normalization
 │   └── valuation.py
 ├── application/            # Use cases and adapter interfaces
 │   ├── ports.py             # Repository and market-data protocols
@@ -76,6 +95,8 @@ src/ohmywealth/
 │   ├── database_catalog.py  # Safe discovery and persisted DB selection
 │   ├── excel.py             # Formatted Excel export and validated import
 │   ├── repository.py        # SQLite repositories and market cache
+│   ├── bonds.py             # Public US bond quotes by ISIN/CUSIP
+│   ├── market_data.py       # Provider routing by identifier
 │   ├── yahoo.py             # yfinance provider
 │   └── demo.py              # Idempotent preview-data seeder
 ├── presentation/           # Dash-only UI code
@@ -97,9 +118,9 @@ tests/                      # Focused domain, workflow, DB, and smoke tests
   startup and adds it to navigation automatically.
 - Add a visualization as a figure factory in `presentation/figures.py`, then
   call it from its owning page.
-- Replace Yahoo Finance by implementing `MarketDataProvider` from
-  `application/ports.py` and changing the adapter created in
-  `presentation/app.py`.
+- Replace a quote source by implementing `MarketDataProvider` from
+  `application/ports.py` and changing the routed adapter created in
+  `presentation/runtime.py`.
 - Replace persistence by implementing `WealthRepository` and `MarketCache`.
   Application and domain code do not import SQLAlchemy or Dash.
 - Add schema changes in `infrastructure/database.py` and increment the stored

@@ -54,7 +54,14 @@ class ReportingService:
             for asset in self.repository.list_assets(include_archived=True)
             if asset.id is not None and (asset_ids is None or asset.id in asset_ids)
         }
-        snapshots = self.repository.list_snapshots()
+        # A positionless snapshot is an uninitialized worksheet draft, not a
+        # statement that the portfolio is worth zero. Deliberate zero balances
+        # are persisted as positions whose quantities are zero.
+        snapshots = [
+            snapshot
+            for snapshot in self.repository.list_snapshots()
+            if snapshot.positions
+        ]
         if not snapshots:
             return WealthReport((), (), (), ())
 
@@ -67,7 +74,11 @@ class ReportingService:
                 rates[asset.currency] = self.market.fx_rate(
                     asset.currency, report_currency, refresh
                 )
-                if asset.kind != AssetKind.CASH:
+                if asset.kind not in {
+                    AssetKind.CASH,
+                    AssetKind.CD,
+                    AssetKind.PRIVATE_BOND,
+                }:
                     prices[asset.id] = self.market.price(asset.symbol, refresh)
             except Exception as error:
                 warnings.append(f"{asset.symbol}: {error}")

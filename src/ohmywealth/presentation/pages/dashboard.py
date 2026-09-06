@@ -5,12 +5,13 @@ from decimal import Decimal
 import dash
 from dash import Input, Output, callback, dash_table, dcc, html
 
-from ohmywealth.domain.models import SUPPORTED_CURRENCIES
+from ohmywealth.domain.models import SUPPORTED_CURRENCIES, AssetKind
 from ohmywealth.presentation.figures import (
     class_history_figure,
     composition_figure,
     history_figure,
 )
+from ohmywealth.presentation.filters import selected_asset_ids
 from ohmywealth.presentation.runtime import get
 
 dash.register_page(__name__, path="/", name="Dashboard")
@@ -26,12 +27,34 @@ def layout() -> html.Div:
                     dcc.Dropdown(
                         id="dashboard-assets",
                         options=[
-                            {"label": item.display_name, "value": item.id}
-                            for item in assets
+                            {"label": "All assets", "value": "all"},
+                            *[
+                                {
+                                    "label": f"[Asset class] {kind.label}",
+                                    "value": f"class:{kind.value}",
+                                }
+                                for kind in AssetKind
+                                if any(asset.kind == kind for asset in assets)
+                            ],
+                            *[
+                                {
+                                    "label": f"[Currency] {currency}",
+                                    "value": f"currency:{currency}",
+                                }
+                                for currency in SUPPORTED_CURRENCIES
+                                if any(asset.currency == currency for asset in assets)
+                            ],
+                            *[
+                                {
+                                    "label": f"[Account] {item.display_name}",
+                                    "value": f"asset:{item.id}",
+                                }
+                                for item in assets
+                            ],
                         ],
-                        value=[item.id for item in assets],
+                        value=["all"],
                         multi=True,
-                        placeholder="Select assets",
+                        placeholder="Select classes, currencies, or accounts",
                     ),
                     dcc.Dropdown(
                         id="reporting-currency",
@@ -104,14 +127,14 @@ def layout() -> html.Div:
     Input("refresh-market", "n_clicks"),
 )
 def update_dashboard(
-    selected: list[int] | None,
+    selected: list[str] | None,
     reporting_currency: str,
     refresh_clicks: int | None,
 ) -> tuple:
     if reporting_currency in SUPPORTED_CURRENCIES:
         get().repository.set_setting("reporting_currency", reporting_currency)
     report = get().reporting.build(
-        None if selected is None else set(selected),
+        selected_asset_ids(selected, get().repository.list_assets()),
         refresh=dash.ctx.triggered_id == "refresh-market" and bool(refresh_clicks),
     )
     currency = get().repository.get_setting("reporting_currency", "CNY")
@@ -125,7 +148,7 @@ def update_dashboard(
     rows = [
         {
             "name": item.asset.display_name,
-            "kind": item.asset.kind.value.title(),
+            "kind": item.asset.kind.label,
             "quantity": f"{item.quantity:,.4f}",
             "price": f"{item.unit_price:,.4f} {item.asset.currency}",
             "fx": f"{item.fx_rate:,.4f}",

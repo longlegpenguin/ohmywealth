@@ -1,7 +1,10 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+import pytest
+
 from ohmywealth.application.market import CachedMarketData
+from ohmywealth.domain.identifiers import is_valid_isin
 from ohmywealth.domain.models import MarketValue
 from ohmywealth.infrastructure.yahoo import YahooMarketData
 
@@ -51,3 +54,16 @@ def test_yahoo_fx_triangulates_cross_currency_rates(monkeypatch) -> None:
     result = provider.fx_rate("HUF", "HKD")
 
     assert result.value == Decimal("7.8") / Decimal("360")
+
+
+def test_valid_isin_without_yahoo_ticker_has_an_actionable_error(monkeypatch) -> None:
+    provider = YahooMarketData()
+
+    def reject_isin(_value: str) -> None:
+        raise ValueError("Invalid ISIN number: US91282CKR15")
+
+    monkeypatch.setattr("ohmywealth.infrastructure.yahoo.yf.Ticker", reject_isin)
+
+    assert is_valid_isin("US91282CKR15") is True
+    with pytest.raises(ValueError, match="valid ISIN.*does not provide a quote ticker"):
+        provider.metadata("US91282CKR15")

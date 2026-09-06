@@ -31,7 +31,7 @@ presentation ──────► application ──────► domain
 | --- | --- | --- |
 | `domain` | Financial types, invariants, conversion, valuation | Python standard library |
 | `application` | Snapshot, cache, and reporting workflows; adapter protocols | `domain` |
-| `infrastructure` | SQLite/SQLAlchemy repositories, schema setup, yfinance, demo seeding | `application` ports and `domain` types |
+| `infrastructure` | SQLite/SQLAlchemy repositories, schema setup, routed market data, demo seeding | `application` ports and `domain` types |
 | `presentation` | Dash app, pages, callbacks, CSS, and Plotly figures | All layers for composition and display |
 
 Database and analytics modules never import Dash. Page modules own their layout
@@ -64,18 +64,21 @@ The catalog of cash accounts and quoted instruments.
 | Column | SQLite representation | Constraints | Meaning |
 | --- | --- | --- | --- |
 | `id` | integer | primary key | Internal asset identifier |
-| `symbol` | varchar(64) | unique, required | Cash-account key or Yahoo ticker; normalized to uppercase on insert |
+| `symbol` | varchar(64) | unique, required | Cash-account key, Yahoo ticker, ISIN, or CUSIP; normalized to uppercase on insert |
 | `name` | varchar(200) | required | User-facing account or instrument name |
-| `kind` | varchar(20) | required | `cash`, `stock`, `etf`, `bond`, or `other` |
+| `kind` | varchar(20) | required | `cash`, `stock`, `etf`, `bond`, `private_bond`, `cd`, or `other` |
 | `currency` | varchar(3) | required | Native balance or quote currency |
 | `exchange` | varchar(80) | optional | Provider exchange code for quoted assets |
 | `archived` | boolean | required, default false | Hides the asset from active catalog and new worksheets |
 | `nickname` | varchar(200) | optional | User label appended to the official name in parentheses |
 
-Quoted-asset metadata is obtained from yfinance at creation. When a nickname is
-present, the UI renders `Official name (Nickname)` while quotes continue to use
-`symbol`. Archiving never deletes the row, so positions in historical snapshots
-remain resolvable. A restored asset becomes available to worksheets again.
+Quoted-asset metadata comes from the routed provider at creation. Yahoo handles
+ordinary tickers; valid US ISINs and CUSIPs use the public bond adapter. When a
+nickname is present, the UI renders `Official name (Nickname)` while quotes
+continue to use `symbol`. Archiving never deletes the row, so positions in
+historical snapshots remain resolvable. A restored asset becomes available to
+worksheets again. Unsupported identifiers fail explicitly; prices are never
+fabricated.
 
 ### `snapshots`
 
@@ -109,7 +112,7 @@ Last valid quoted-asset prices.
 
 | Column | SQLite representation | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `ticker` | varchar(64) | primary key | Yahoo Finance ticker |
+| `ticker` | varchar(64) | primary key | Provider ticker, ISIN, or CUSIP |
 | `value` | text decimal | required | Price in the asset's native currency |
 | `observed_at` | datetime | required | Cache observation timestamp |
 
@@ -157,11 +160,15 @@ existing columns.
 
 ### Asset creation and archival
 
-Cash accounts use a user-provided name, key, and currency. For quoted assets,
-the yfinance adapter validates the ticker and supplies symbol, official name,
-exchange, type, and currency. An optional user nickname is stored separately
-and displayed in parentheses. Unsupported currencies are rejected. Archive and
-restore only toggle `assets.archived`; they do not modify snapshot data.
+Cash accounts use a user-provided name, key, and currency. Stocks and ETFs use
+the yfinance adapter. Bond ISIN reference data is resolved through OpenFIGI;
+valid US ISINs and CUSIPs additionally use the public bond quote adapter. The
+adapter supplies the available official name, identifier, currency, quote, and
+timestamp. Unlisted OTC bonds or certificates of deposit may have no public
+price and are then omitted with an explicit warning unless a valid cached quote
+exists. An optional user nickname is stored separately and displayed in
+parentheses. Unsupported currencies are rejected. Archive and restore only
+toggle `assets.archived`; they do not modify snapshot data.
 
 ### Monthly worksheet
 
@@ -169,16 +176,18 @@ Opening a missing month copies positions from the latest snapshot strictly
 before that month. If none exists, an empty snapshot is created. Saving validates
 that all quantities are non-negative, normalizes the date to the first of the
 month, and replaces the month's positions transactionally. Existing months can
-be reopened and edited.
+be reopened and edited. A positionless snapshot is treated as an uninitialized
+draft: reopening it copies the preceding month, and reporting ignores it. The UI
+also refuses to save until the month has been opened.
 
 ### Market-data cache
 
 Prices and FX rates are considered fresh for 15 minutes. A normal request uses
-a fresh cache entry; manual refresh bypasses the freshness check. If yfinance
-fails and a previous valid value exists, that value is returned as stale and a
-warning is displayed. If no valid value exists, the holding is omitted from the
-valued report with an explicit warning. Zero is never substituted for missing
-market data.
+a fresh cache entry; manual refresh bypasses the freshness check. If the routed
+provider fails and a previous valid value exists, that value is returned as
+stale and a warning is displayed. If no valid value exists, the holding is
+omitted from the valued report with an explicit warning. Zero is never
+substituted for missing market data.
 
 ### Valuation and reporting
 
@@ -186,8 +195,17 @@ For reporting currency `R`:
 
 ```text
 cash value   = monthly balance × FX(asset currency → R)
-quoted value = monthly units × current price × FX(asset currency → R)
+stock/ETF value = monthly units × current price × FX(asset currency → R)
+bond value   = monthly face value × current percent-of-par price ÷ 100 × FX
+CD value     = monthly current amount × FX(asset currency → R)
+private bond value = monthly current statement amount × FX(asset currency → R)
 ```
+
+A certificate-of-deposit asset represents a stable account rather than an
+individual certificate. It has a user-defined account name and currency, needs
+no ISIN or quote lookup, and records the aggregate current amount each month.
+Renewals therefore do not grow the asset catalog. Ordinary and private bonds
+remain individual instruments.
 
 Every historical month deliberately uses current prices and current FX rates.
 Consequently, the history shows how today's valuation of recorded quantities
@@ -241,8 +259,9 @@ outputs.
 ### Replace market data
 
 Implement `MarketDataProvider` from `application/ports.py` with `metadata`,
-`price`, and `fx_rate`. Wire the adapter in `presentation/app.py`. Caching and
-fallback behavior remain in the application layer.
+`price`, and `fx_rate`, or add an identifier route to
+`infrastructure/market_data.py`. Wire replacements in `presentation/runtime.py`.
+Caching and fallback behavior remain in the application layer.
 
 ### Replace persistence
 

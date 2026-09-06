@@ -32,6 +32,8 @@ def class_history_figure(report: WealthReport) -> go.Figure:
         AssetKind.STOCK: "#4f6bed",
         AssetKind.ETF: "#f4a261",
         AssetKind.BOND: "#8f6bb3",
+        AssetKind.PRIVATE_BOND: "#a785c4",
+        AssetKind.CD: "#d17b88",
         AssetKind.OTHER: "#82938f",
     }
     present_classes = [
@@ -42,12 +44,12 @@ def class_history_figure(report: WealthReport) -> go.Figure:
     figure = go.Figure(
         [
             go.Bar(
-                name=asset_class.value.title(),
+                name=asset_class.label,
                 x=months,
                 y=[values.get((month, asset_class), 0) for month in months],
                 marker={"color": colors[asset_class]},
                 hovertemplate=(
-                    f"{asset_class.value.title()}<br>%{{x|%B %Y}}"
+                    f"{asset_class.label}<br>%{{x|%B %Y}}"
                     "<br>%{y:,.2f}<extra></extra>"
                 ),
             )
@@ -74,7 +76,7 @@ def composition_figure(report: WealthReport, by: str) -> go.Figure:
     groups: dict[str, float] = defaultdict(float)
     for item in report.holdings:
         if by == "class":
-            key = item.asset.kind.value.title()
+            key = item.asset.kind.label
         elif item.asset.kind == AssetKind.CASH:
             key = item.asset.display_name
         else:
@@ -84,6 +86,28 @@ def composition_figure(report: WealthReport, by: str) -> go.Figure:
                 else item.asset.symbol
             )
         groups[key] += float(item.value)
+
+    if not groups:
+        title = (
+            "Composition by asset class"
+            if by == "class"
+            else "Composition by account or ticker"
+        )
+        figure = go.Figure()
+        figure.add_annotation(
+            text="No valued holdings in the latest completed month",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
+        figure.update_layout(
+            height=460,
+            xaxis={"visible": False},
+            yaxis={"visible": False},
+        )
+        return _style(figure, title)
 
     if by == "class":
         figure = go.Figure(
