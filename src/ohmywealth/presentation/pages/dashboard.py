@@ -3,15 +3,15 @@
 from decimal import Decimal
 
 import dash
-from dash import Input, Output, callback, dash_table, dcc, html
+from dash import ALL, Input, Output, callback, dash_table, dcc, html
 
-from ohmywealth.domain.models import SUPPORTED_CURRENCIES, AssetKind
+from ohmywealth.domain.models import SUPPORTED_CURRENCIES, Asset, AssetKind
 from ohmywealth.presentation.figures import (
     class_history_figure,
     composition_figure,
     history_figure,
 )
-from ohmywealth.presentation.filters import selected_asset_ids
+from ohmywealth.presentation.filters import asset_ids, grouped_asset_ids, toggle_group
 from ohmywealth.presentation.runtime import get
 
 dash.register_page(__name__, path="/", name="Dashboard")
@@ -25,38 +25,6 @@ def layout() -> html.Div:
                 [
                     html.H2("Overview"),
                     dcc.Dropdown(
-                        id="dashboard-assets",
-                        options=[
-                            {"label": "All assets", "value": "all"},
-                            *[
-                                {
-                                    "label": f"[Asset class] {kind.label}",
-                                    "value": f"class:{kind.value}",
-                                }
-                                for kind in AssetKind
-                                if any(asset.kind == kind for asset in assets)
-                            ],
-                            *[
-                                {
-                                    "label": f"[Currency] {currency}",
-                                    "value": f"currency:{currency}",
-                                }
-                                for currency in SUPPORTED_CURRENCIES
-                                if any(asset.currency == currency for asset in assets)
-                            ],
-                            *[
-                                {
-                                    "label": f"[Account] {item.display_name}",
-                                    "value": f"asset:{item.id}",
-                                }
-                                for item in assets
-                            ],
-                        ],
-                        value=["all"],
-                        multi=True,
-                        placeholder="Select classes, currencies, or accounts",
-                    ),
-                    dcc.Dropdown(
                         id="reporting-currency",
                         options=list(SUPPORTED_CURRENCIES),
                         value=get().repository.get_setting("reporting_currency", "CNY"),
@@ -67,6 +35,7 @@ def layout() -> html.Div:
                 ],
                 className="toolbar",
             ),
+            _asset_filter_tree(assets),
             html.Div(id="market-warnings"),
             html.Div(
                 [
@@ -113,6 +82,202 @@ def layout() -> html.Div:
     )
 
 
+def _asset_filter_tree(assets: list[Asset]) -> html.Details:
+    classes = [kind for kind in AssetKind if any(a.kind == kind for a in assets)]
+    return html.Details(
+        [
+            html.Summary(
+                [
+                    html.Strong("Filter assets"),
+                    html.Small(
+                        f" · {len(assets)} selected",
+                        id="dashboard-filter-summary",
+                    ),
+                ]
+            ),
+            html.Div(
+                [
+                    dcc.Checklist(
+                        id="dashboard-all-check",
+                        options=[{"label": "All assets", "value": "all"}],
+                        value=["all"],
+                        className="filter-all",
+                    ),
+                    *[
+                        html.Details(
+                            [
+                                html.Summary(
+                                    f"{kind.label} · "
+                                    f"{len([a for a in assets if a.kind == kind])}"
+                                ),
+                                dcc.Checklist(
+                                    id={
+                                        "type": "dashboard-class-check",
+                                        "index": kind.value,
+                                    },
+                                    options=[
+                                        {
+                                            "label": f"Select all {kind.label}",
+                                            "value": kind.value,
+                                        }
+                                    ],
+                                    value=[kind.value],
+                                    className="filter-class",
+                                ),
+                                *[
+                                    html.Details(
+                                    [
+                                        html.Summary(
+                                            f"{currency} · "
+                                            + str(
+                                                len(
+                                                    grouped_asset_ids(
+                                                        assets,
+                                                        kind.value,
+                                                        currency,
+                                                    )
+                                                )
+                                            )
+                                        ),
+                                        dcc.Checklist(
+                                            id={
+                                                "type": "dashboard-currency-check",
+                                                "index": f"{kind.value}|{currency}",
+                                            },
+                                            options=[
+                                                {
+                                                    "label": f"Select all {currency}",
+                                                    "value": f"{kind.value}|{currency}",
+                                                }
+                                            ],
+                                            value=[f"{kind.value}|{currency}"],
+                                            className="filter-currency",
+                                        ),
+                                        dcc.Checklist(
+                                            id={
+                                                "type": "dashboard-account-check",
+                                                "index": f"{kind.value}|{currency}",
+                                            },
+                                            options=[
+                                                {
+                                                    "label": asset.display_name,
+                                                    "value": asset.id,
+                                                }
+                                                for asset in assets
+                                                if asset.id is not None
+                                                and asset.kind == kind
+                                                and asset.currency == currency
+                                            ],
+                                            value=[
+                                                asset.id
+                                                for asset in assets
+                                                if asset.id is not None
+                                                and asset.kind == kind
+                                                and asset.currency == currency
+                                            ],
+                                            className="filter-accounts",
+                                        ),
+                                    ],
+                                    className="filter-currency-group",
+                                )
+                                    for currency in SUPPORTED_CURRENCIES
+                                    if any(
+                                        asset.kind == kind
+                                        and asset.currency == currency
+                                        for asset in assets
+                                    )
+                                ],
+                            ],
+                            className="filter-class-group",
+                        )
+                        for kind in classes
+                    ],
+                ],
+                className="filter-tree-content",
+            ),
+        ],
+        className="asset-filter-tree",
+    )
+
+
+@callback(
+    Output("dashboard-all-check", "value"),
+    Output({"type": "dashboard-class-check", "index": ALL}, "value"),
+    Output({"type": "dashboard-currency-check", "index": ALL}, "value"),
+    Output({"type": "dashboard-account-check", "index": ALL}, "value"),
+    Output("dashboard-filter-summary", "children"),
+    Input("dashboard-all-check", "value"),
+    Input({"type": "dashboard-class-check", "index": ALL}, "value"),
+    Input({"type": "dashboard-currency-check", "index": ALL}, "value"),
+    Input({"type": "dashboard-account-check", "index": ALL}, "value"),
+)
+def sync_asset_filter_tree(
+    all_value: list[str],
+    class_values: list[list[str]],
+    currency_values: list[list[str]],
+    account_values: list[list[int]],
+) -> tuple[list[str], list[list[str]], list[list[str]], list[list[int]], str]:
+    assets = get().repository.list_assets()
+    classes = [kind for kind in AssetKind if any(a.kind == kind for a in assets)]
+    currencies = [
+        (kind, currency)
+        for kind in classes
+        for currency in SUPPORTED_CURRENCIES
+        if any(a.kind == kind and a.currency == currency for a in assets)
+    ]
+    selected = {asset_id for values in account_values for asset_id in values}
+    triggered = dash.ctx.triggered_id
+    if triggered == "dashboard-all-check":
+        selected = asset_ids(assets) if "all" in all_value else set()
+    elif isinstance(triggered, dict) and triggered["type"] == "dashboard-class-check":
+        key = str(triggered["index"])
+        index = [kind.value for kind in classes].index(key)
+        selected = toggle_group(
+            selected,
+            grouped_asset_ids(assets, key),
+            key in class_values[index],
+        )
+    elif (
+        isinstance(triggered, dict)
+        and triggered["type"] == "dashboard-currency-check"
+    ):
+        key = str(triggered["index"])
+        index = [f"{kind.value}|{currency}" for kind, currency in currencies].index(
+            key
+        )
+        kind_value, currency = key.split("|", 1)
+        selected = toggle_group(
+            selected,
+            grouped_asset_ids(assets, kind_value, currency),
+            key in currency_values[index],
+        )
+
+    all_ids = asset_ids(assets)
+    class_output = [
+        [kind.value]
+        if grouped_asset_ids(assets, kind.value) <= selected
+        else []
+        for kind in classes
+    ]
+    currency_output = [
+        [f"{kind.value}|{currency}"]
+        if grouped_asset_ids(assets, kind.value, currency) <= selected
+        else []
+        for kind, currency in currencies
+    ]
+    account_output = [
+        sorted(grouped_asset_ids(assets, kind.value, currency) & selected)
+        for kind, currency in currencies
+    ]
+    return (
+        ["all"] if all_ids and all_ids <= selected else [],
+        class_output,
+        currency_output,
+        account_output,
+        f" · {len(selected)}/{len(all_ids)} selected",
+    )
+
+
 @callback(
     Output("wealth-total", "children"),
     Output("wealth-growth", "children"),
@@ -122,19 +287,20 @@ def layout() -> html.Div:
     Output("asset-composition", "figure"),
     Output("holdings-table", "data"),
     Output("market-warnings", "children"),
-    Input("dashboard-assets", "value"),
+    Input({"type": "dashboard-account-check", "index": ALL}, "value"),
     Input("reporting-currency", "value"),
     Input("refresh-market", "n_clicks"),
 )
 def update_dashboard(
-    selected: list[str] | None,
+    selected_groups: list[list[int]],
     reporting_currency: str,
     refresh_clicks: int | None,
 ) -> tuple:
     if reporting_currency in SUPPORTED_CURRENCIES:
         get().repository.set_setting("reporting_currency", reporting_currency)
+    selected = {asset_id for values in selected_groups for asset_id in values}
     report = get().reporting.build(
-        selected_asset_ids(selected, get().repository.list_assets()),
+        selected,
         refresh=dash.ctx.triggered_id == "refresh-market" and bool(refresh_clicks),
     )
     currency = get().repository.get_setting("reporting_currency", "CNY")

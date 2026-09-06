@@ -44,9 +44,11 @@ enter cash balances, stock/ETF units, or the face value of bonds. A new month
 starts from the latest preceding snapshot. The dashboard defaults to CNY and
 marks stale cached quotes when a provider is unavailable.
 
-The Overview selector can filter the complete report by asset class, account
-currency, or individual account. Multiple selections are combined, and
-`All assets` restores the full portfolio.
+The Overview selector is a three-level checkbox tree: asset class, account
+currency, and individual account. Selecting a parent checks its real child
+accounts; individual children can then be excluded. Parent checks automatically
+reflect whether all descendants remain selected, and `All assets` restores the
+full portfolio.
 
 Ordinary bond prices are percentages of par. For example, face value `10,000`
 at a quote of `100.266` is valued at `10,026.60` before currency conversion.
