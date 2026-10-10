@@ -33,7 +33,9 @@ The local launcher enables Dash debug mode, so source and stylesheet changes
 automatically reload the development server.
 
 To preview a sample portfolio in an empty database, run `uv run ohmywealth-demo`.
-The command never changes a database that already contains assets.
+The demo includes 14 accounts and investments across six currencies, five asset
+classes, and 12 monthly snapshots. The command never changes a database that
+already contains assets.
 
 Use **Assets** to add cash accounts, Yahoo Finance tickers, bonds by ISIN, or US
 bonds by CUSIP. ISIN reference data is resolved through OpenFIGI; public US bond
@@ -65,6 +67,11 @@ data. Its wealth, change, account-change chart, compositions, and holdings table
 all update to the selected snapshot and compare it with the preceding snapshot.
 The holdings table shows both the selected snapshot month and the timestamp of
 the current market price/FX data used for valuation.
+
+Use **Export PNG** after adjusting the filters and dates to download a
+high-resolution report containing the complete period and monthly analysis,
+including charts and the holdings table. Rendering happens entirely in the
+browser and does not upload portfolio data.
 
 Monthly snapshots are month-end balances. History charts therefore place each
 point on the actual last calendar day of its month and label the X axis by month;

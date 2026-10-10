@@ -49,7 +49,18 @@ def layout() -> html.Div:
                         clearable=False,
                         className="currency-picker",
                     ),
-                    html.Button("Refresh market data", id="refresh-market"),
+                    html.Div(
+                        [
+                            html.Button("Refresh market data", id="refresh-market"),
+                            html.Button(
+                                "Export PNG",
+                                id="export-dashboard-png",
+                                className="secondary-button",
+                            ),
+                            html.Small(id="export-png-status"),
+                        ],
+                        className="toolbar-actions",
+                    ),
                 ],
                 className="toolbar",
             ),

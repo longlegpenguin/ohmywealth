@@ -238,6 +238,11 @@ chart, compositions, and holdings. Reporting accepts an optional exact `as_of`
 month so this behavior remains independent of Dash. The holdings table displays
 both the selected snapshot month and the timestamp of the current market-price
 or FX observation used for valuation.
+
+Dashboard PNG export is a presentation-only browser workflow. It uses Plotly's
+client-side image export for the currently rendered figures and composes those
+images, selected controls, metrics, and table values onto a local canvas. No
+portfolio data is sent to a server beyond the existing local Dash application.
 Cash holdings are grouped by account name;
 quoted holdings are grouped by ticker. The account/ticker chart uses horizontal
 bars and grows vertically so portfolios with many accounts remain legible. A
