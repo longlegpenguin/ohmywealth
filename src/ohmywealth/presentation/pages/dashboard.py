@@ -1,5 +1,7 @@
 """Portfolio dashboard page."""
 
+from calendar import monthrange
+from datetime import date
 from decimal import Decimal
 
 import dash
@@ -7,9 +9,11 @@ from dash import ALL, Input, Output, callback, dash_table, dcc, html
 
 from ohmywealth.domain.models import SUPPORTED_CURRENCIES, Asset, AssetKind
 from ohmywealth.presentation.figures import (
+    account_change_figure,
     class_history_figure,
     composition_figure,
     history_figure,
+    overall_account_change_figure,
 )
 from ohmywealth.presentation.filters import asset_ids, grouped_asset_ids, toggle_group
 from ohmywealth.presentation.runtime import get
@@ -19,6 +23,20 @@ dash.register_page(__name__, path="/", name="Dashboard")
 
 def layout() -> html.Div:
     assets = get().repository.list_assets()
+    snapshot_months = sorted(
+        {
+            snapshot.month
+            for snapshot in get().repository.list_snapshots()
+            if snapshot.positions
+        }
+    )
+    year_options = sorted({month.year for month in snapshot_months})
+    month_options = [
+        {"label": date(2000, month, 1).strftime("%B"), "value": month}
+        for month in range(1, 13)
+    ]
+    first_month = snapshot_months[0] if snapshot_months else None
+    last_month = snapshot_months[-1] if snapshot_months else None
     return html.Div(
         [
             html.Div(
@@ -36,11 +54,112 @@ def layout() -> html.Div:
                 className="toolbar",
             ),
             _asset_filter_tree(assets),
+            html.H3("Period analysis", className="section-heading"),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Label("Start year", htmlFor="history-start-year"),
+                            dcc.Dropdown(
+                                id="history-start-year",
+                                options=year_options,
+                                value=first_month.year if first_month else None,
+                                clearable=False,
+                            ),
+                        ],
+                        className="history-month-field",
+                    ),
+                    html.Div(
+                        [
+                            html.Label("Start month", htmlFor="history-start-month"),
+                            dcc.Dropdown(
+                                id="history-start-month",
+                                options=month_options,
+                                value=first_month.month if first_month else None,
+                                clearable=False,
+                            ),
+                        ],
+                        className="history-month-field",
+                    ),
+                    html.Div(
+                        [
+                            html.Label("End year", htmlFor="history-end-year"),
+                            dcc.Dropdown(
+                                id="history-end-year",
+                                options=year_options,
+                                value=last_month.year if last_month else None,
+                                clearable=False,
+                            ),
+                        ],
+                        className="history-month-field",
+                    ),
+                    html.Div(
+                        [
+                            html.Label("End month", htmlFor="history-end-month"),
+                            dcc.Dropdown(
+                                id="history-end-month",
+                                options=month_options,
+                                value=last_month.month if last_month else None,
+                                clearable=False,
+                            ),
+                        ],
+                        className="history-month-field",
+                    ),
+                ],
+                className="history-range",
+            ),
+            html.Div(
+                [
+                    dcc.Graph(id="wealth-history"),
+                    dcc.Graph(
+                        id="class-history",
+                        className="chart-card",
+                    ),
+                    dcc.Graph(
+                        id="overall-account-changes",
+                        className="chart-card",
+                    ),
+                ],
+                className="trend-charts",
+            ),
+            html.H3("Monthly snapshot", className="section-heading"),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Label("Year", htmlFor="snapshot-year"),
+                            dcc.Dropdown(
+                                id="snapshot-year",
+                                options=year_options,
+                                value=last_month.year if last_month else None,
+                                clearable=False,
+                            ),
+                        ],
+                        className="history-month-field",
+                    ),
+                    html.Div(
+                        [
+                            html.Label("Month", htmlFor="snapshot-month"),
+                            dcc.Dropdown(
+                                id="snapshot-month",
+                                options=month_options,
+                                value=last_month.month if last_month else None,
+                                clearable=False,
+                            ),
+                        ],
+                        className="history-month-field",
+                    ),
+                ],
+                className="history-range",
+            ),
             html.Div(id="market-warnings"),
             html.Div(
                 [
                     html.Div(
-                        [html.Small("Current wealth"), html.H2(id="wealth-total")]
+                        [
+                            html.Small("Selected month wealth"),
+                            html.H2(id="wealth-total"),
+                        ]
                     ),
                     html.Div(
                         [html.Small("Monthly change"), html.H2(id="wealth-growth")]
@@ -50,9 +169,8 @@ def layout() -> html.Div:
             ),
             html.Div(
                 [
-                    dcc.Graph(id="wealth-history"),
                     dcc.Graph(
-                        id="class-history",
+                        id="account-changes",
                         className="chart-card",
                     ),
                 ],
@@ -74,6 +192,7 @@ def layout() -> html.Div:
                     {"name": "Price", "id": "price"},
                     {"name": "FX", "id": "fx"},
                     {"name": "Value", "id": "value"},
+                    {"name": "Month", "id": "month"},
                     {"name": "Quote time", "id": "time"},
                 ],
                 style_table={"overflowX": "auto"},
@@ -283,34 +402,53 @@ def sync_asset_filter_tree(
     Output("wealth-growth", "children"),
     Output("wealth-history", "figure"),
     Output("class-history", "figure"),
+    Output("account-changes", "figure"),
+    Output("overall-account-changes", "figure"),
     Output("class-composition", "figure"),
     Output("asset-composition", "figure"),
     Output("holdings-table", "data"),
     Output("market-warnings", "children"),
     Input({"type": "dashboard-account-check", "index": ALL}, "value"),
+    Input("history-start-year", "value"),
+    Input("history-start-month", "value"),
+    Input("history-end-year", "value"),
+    Input("history-end-month", "value"),
+    Input("snapshot-year", "value"),
+    Input("snapshot-month", "value"),
     Input("reporting-currency", "value"),
     Input("refresh-market", "n_clicks"),
 )
 def update_dashboard(
     selected_groups: list[list[int]],
+    history_start_year: int | None,
+    history_start_month: int | None,
+    history_end_year: int | None,
+    history_end_month: int | None,
+    snapshot_year: int | None,
+    snapshot_month: int | None,
     reporting_currency: str,
     refresh_clicks: int | None,
 ) -> tuple:
     if reporting_currency in SUPPORTED_CURRENCIES:
         get().repository.set_setting("reporting_currency", reporting_currency)
     selected = {asset_id for values in selected_groups for asset_id in values}
+    start = _selected_month_start(history_start_year, history_start_month)
+    end = _selected_month_end(history_end_year, history_end_month)
+    as_of = _selected_month_start(snapshot_year, snapshot_month)
     report = get().reporting.build(
         selected,
         refresh=dash.ctx.triggered_id == "refresh-market" and bool(refresh_clicks),
+        as_of=as_of,
     )
     currency = get().repository.get_setting("reporting_currency", "CNY")
-    growth = Decimal("0")
+    growth = sum(
+        (item.change for item in report.account_changes),
+        Decimal("0"),
+    )
     percent = Decimal("0")
-    if len(report.history) > 1:
-        previous = report.history[-2].total
-        growth = report.history[-1].total - previous
-        if previous:
-            percent = growth / previous * 100
+    previous = report.total - growth
+    if report.comparison_month is not None and previous:
+        percent = growth / previous * 100
     rows = [
         {
             "name": item.asset.display_name,
@@ -319,25 +457,55 @@ def update_dashboard(
             "price": f"{item.unit_price:,.4f} {item.asset.currency}",
             "fx": f"{item.fx_rate:,.4f}",
             "value": f"{item.value:,.2f} {currency}",
+            "month": (
+                report.snapshot_month.strftime("%Y-%m")
+                if report.snapshot_month is not None
+                else ""
+            ),
             "time": item.quote_time.astimezone().strftime("%Y-%m-%d %H:%M"),
         }
         for item in report.holdings
     ]
     warning = (
         html.Div(
-            [html.Strong("Market data warning: "), " · ".join(report.warnings)],
+            [html.Strong("Warning: "), " · ".join(report.warnings)],
             className="warning",
         )
         if report.warnings
         else None
     )
+    total_text = (
+        f"{report.total:,.2f} {currency}"
+        if report.snapshot_month is not None
+        else "No snapshot"
+    )
+    growth_text = (
+        f"{growth:+,.2f} ({percent:+.2f}%)"
+        if report.snapshot_month is not None
+        and report.comparison_month is not None
+        else "Not available"
+    )
     return (
-        f"{report.total:,.2f} {currency}",
-        f"{growth:+,.2f} ({percent:+.2f}%)",
-        history_figure(report),
-        class_history_figure(report),
+        total_text,
+        growth_text,
+        history_figure(report, start, end),
+        class_history_figure(report, start, end),
+        account_change_figure(report),
+        overall_account_change_figure(report, start, end),
         composition_figure(report, "class"),
         composition_figure(report, "asset"),
         rows,
         warning,
     )
+
+
+def _month_end(month: date) -> date:
+    return month.replace(day=monthrange(month.year, month.month)[1])
+
+
+def _selected_month_start(year: int | None, month: int | None) -> date | None:
+    return None if year is None or month is None else date(year, month, 1)
+
+
+def _selected_month_end(year: int | None, month: int | None) -> date | None:
+    return None if year is None or month is None else _month_end(date(year, month, 1))

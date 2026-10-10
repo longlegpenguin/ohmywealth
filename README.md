@@ -50,6 +50,30 @@ accounts; individual children can then be excluded. Parent checks automatically
 reflect whether all descendants remain selected, and `All assets` restores the
 full portfolio.
 
+The dashboard includes a diverging monthly-change chart for every account whose
+value changed between the latest two completed snapshots. Positive and negative
+bars reconcile to the total Monthly change and use current prices and FX, just
+like the wealth-history calculation.
+
+An Overall change by account chart uses the dashboard's selected start and end
+period. It compares the first and last available snapshots inside that range,
+omits unchanged accounts, and uses the same current-price/current-FX valuation.
+
+The dashboard places period analysis first. A separate Monthly snapshot section
+below it has year and month selectors that default to the latest month containing
+data. Its wealth, change, account-change chart, compositions, and holdings table
+all update to the selected snapshot and compare it with the preceding snapshot.
+The holdings table shows both the selected snapshot month and the timestamp of
+the current market price/FX data used for valuation.
+
+Monthly snapshots are month-end balances. History charts therefore place each
+point on the actual last calendar day of its month and label the X axis by month;
+the database's first-of-month date remains only an internal normalized key.
+Separate year and month selectors for the start and end change the inclusive
+period shown by both history charts. Years come from existing snapshot data and
+months use a fixed 12-item list, so the controls stay short as data accumulates.
+Current-wealth and composition metrics are unchanged.
+
 Ordinary bond prices are percentages of par. For example, face value `10,000`
 at a quote of `100.266` is valued at `10,026.60` before currency conversion.
 Certificates of deposit are shown as a separate asset class and use the current

@@ -213,8 +213,32 @@ changed across monthly snapshots; it is not a historical-price performance
 series. Monthly growth is the absolute and percentage difference between the
 last two totals.
 
+Snapshot dates are stored as the first day of the month solely as normalized
+month keys. User-entered balances represent the last-day state, so history
+figures plot them at the actual calendar month end and use explicit monthly axis
+labels rather than automatic daily ticks.
+
+The dashboard has separate year and month selectors for both range boundaries.
+Available years come from snapshot data while each month selector contains the
+fixed 12 calendar months, keeping the controls compact as history grows. They
+apply an inclusive range to wealth history and stacked asset-class history.
+This is a presentation filter: current wealth, composition, holdings, and
+latest monthly account changes remain anchored to the latest snapshot.
+
 Dashboard asset selection is applied before totals, history, compositions, and
-the holdings table are produced. Cash holdings are grouped by account name;
+the account-change chart and holdings table are produced. The account-change
+chart compares the latest two completed snapshots at current prices and FX,
+omits unchanged accounts, and its signed bars sum to the total monthly change.
+The overall account-change chart compares the first and last available snapshots
+inside the selected history range using the same valuation and asset filters.
+Period analysis is presented above a separate monthly-snapshot section. The
+monthly year/month selector defaults to the latest snapshot containing data and
+drives the selected wealth total, preceding-snapshot change, account-change
+chart, compositions, and holdings. Reporting accepts an optional exact `as_of`
+month so this behavior remains independent of Dash. The holdings table displays
+both the selected snapshot month and the timestamp of the current market-price
+or FX observation used for valuation.
+Cash holdings are grouped by account name;
 quoted holdings are grouped by ticker. The account/ticker chart uses horizontal
 bars and grows vertically so portfolios with many accounts remain legible. A
 stacked monthly bar chart splits each marked-to-current-value total into asset
